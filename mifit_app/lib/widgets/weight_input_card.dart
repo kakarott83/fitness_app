@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/stat_progress_card.dart';
 
 class WeightInputCard extends StatefulWidget {
   const WeightInputCard({super.key});
@@ -10,116 +11,107 @@ class WeightInputCard extends StatefulWidget {
 
 class _WeightInputCardState extends State<WeightInputCard> {
   final Map<String, TextEditingController> _controllers = {
-    'show_weight': TextEditingController(),
-    'show_fat': TextEditingController(),
-    'show_muscle': TextEditingController(),
-    'show_brust': TextEditingController(),
-    'show_oberarm': TextEditingController(),
-    'show_bauch': TextEditingController(),
-    'show_oberschenkel': TextEditingController(),
-    'show_waden': TextEditingController(),
-  };
-
-  final Map<String, String> _labels = {
-    'show_weight': 'Gewicht', 'show_fat': 'Fett %', 'show_muscle': 'Muskel',
-    'show_brust': 'Brust', 'show_oberarm': 'Arm', 'show_bauch': 'Bauch',
-    'show_oberschenkel': 'Bein', 'show_waden': 'Wade',
-    'show_hals': 'Hals', 'show_tailie': 'Taille', 'show_huefte': 'Hüfte', // NEU
-  };
-
-  final Map<String, String> _dbMapping = {
-    'show_weight': 'weight',
-    'show_fat': 'body_fat',
-    'show_muscle': 'muscle_mass',
-    'show_brust': 'chest', 'show_oberarm': 'upper_arm', 'show_bauch': 'waist',
-    'show_oberschenkel': 'thigh', 'show_waden': 'calf',
-    'show_hals': 'neck',
-    'show_tailie': 'waist_custom',
-    'show_huefte': 'hip', // NEU
+    for (final key in kStatConfig.keys) key: TextEditingController(),
   };
 
   Future<void> _save() async {
     final user = Supabase.instance.client.auth.currentUser;
-    final Map<String, dynamic> toSave = {'user_id': user!.id};
+    if (user == null) return;
 
-    _controllers.forEach((key, ctrl) {
-      if (ctrl.text.isNotEmpty) {
-        toSave[_dbMapping[key]!] = double.parse(
-          ctrl.text.replaceFirst(',', '.'),
-        );
+    final Map<String, dynamic> toSave = {'user_id': user.id};
+    for (final entry in kStatConfig.entries) {
+      final ctrl = _controllers[entry.key];
+      if (ctrl != null && ctrl.text.isNotEmpty) {
+        toSave[entry.value['column']!] =
+            double.tryParse(ctrl.text.replaceFirst(',', '.'));
       }
-    });
+    }
+
+    if (toSave.length <= 1) return; // nur user_id, nichts eingegeben
 
     try {
-      // Hier ist der asynchrone Aufruf (das Warten auf die Datenbank)
       await Supabase.instance.client.from('body_stats').insert(toSave);
-
-      // --- HIER MUSS ES HIN ---
       if (!mounted) return;
-      // Ab hier ist sichergestellt, dass das Widget noch existiert
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Daten gespeichert! ✅')));
-
-      // Felder leeren
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Daten gespeichert!')),
+      );
       for (var c in _controllers.values) {
         c.clear();
       }
       FocusScope.of(context).unfocus();
     } catch (e) {
-      // Auch hier nach dem catch sicherheitshalber prüfen
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Fehler: $e')));
     }
   }
 
   @override
+  void dispose() {
+    for (var c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return const SizedBox();
+
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: Supabase.instance.client
           .from('user_settings')
           .stream(primaryKey: ['user_id'])
-          .eq('user_id', Supabase.instance.client.auth.currentUser!.id),
+          .eq('user_id', userId),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox();
         }
         final settings = snapshot.data!.first;
-        final activeKeys = _labels.keys
-            .where((k) => settings[k] == true)
-            .toList();
+        final activeKeys =
+            kStatConfig.keys.where((k) => settings[k] == true).toList();
+
+        if (activeKeys.isEmpty) return const SizedBox();
 
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: activeKeys
-                      .map(
-                        (k) => SizedBox(
-                          width: (MediaQuery.of(context).size.width / 2) - 35,
-                          child: TextField(
-                            controller: _controllers[k],
-                            decoration: InputDecoration(
-                              labelText: _labels[k],
-                              border: const OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                          ),
+                  children: activeKeys.map((k) {
+                    final cfg = kStatConfig[k]!;
+                    return SizedBox(
+                      width: (MediaQuery.of(context).size.width / 2) - 37,
+                      child: TextField(
+                        controller: _controllers[k],
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                      )
-                      .toList(),
+                        decoration: InputDecoration(
+                          labelText: cfg['label'],
+                          suffixText: cfg['unit'],
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: _save,
-                  child: const Text("Speichern"),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _save,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Speichern'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                    ),
+                  ),
                 ),
               ],
             ),

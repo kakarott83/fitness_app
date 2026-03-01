@@ -1,6 +1,10 @@
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/database_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/stat_progress_card.dart';
+import '../widgets/weight_input_card.dart';
 
 class DashboardView extends StatefulWidget {
   const DashboardView({super.key, required this.onStartTraining});
@@ -12,111 +16,168 @@ class DashboardView extends StatefulWidget {
 
 class _DashboardViewState extends State<DashboardView> {
   final _dbService = DatabaseService();
+  final _supabase = Supabase.instance.client;
+
   int _workoutsThisWeek = 0;
   Map<String, dynamic>? _lastWorkout;
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    _loadWorkoutData();
   }
 
-  Future<void> _loadDashboardData() async {
+  Future<void> _loadWorkoutData() async {
     final count = await _dbService.getWorkoutsThisWeek();
     final last = await _dbService.getLastWorkout();
     if (mounted) {
       setState(() {
         _workoutsThisWeek = count;
         _lastWorkout = last;
-        _isLoading = false;
       });
     }
   }
 
-  void refresh() {
-    _loadDashboardData();
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadDashboardData,
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  const SizedBox(height: 40),
-                  _buildHeader(),
-                  const SizedBox(height: 30),
-                  _buildStatCards(),
-                  const SizedBox(height: 30),
-                  _buildLastWorkoutCard(),
-                  const SizedBox(height: 30),
-                  _buildQuickActions(),
-                ],
-              ),
+    final cs = Theme.of(context).colorScheme;
+    final userId = _supabase.auth.currentUser?.id;
+
+    return RefreshIndicator(
+      onRefresh: _loadWorkoutData,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+        children: [
+          // ── Begrüßung ────────────────────────────────────────────────────
+          _buildHeader(cs),
+          const SizedBox(height: 20),
+
+          // ── Workout-Statistiken ──────────────────────────────────────────
+          _buildWorkoutStatRow(cs),
+          const SizedBox(height: 12),
+
+          if (_lastWorkout != null) ...[
+            _buildLastWorkoutCard(cs),
+            const SizedBox(height: 12),
+          ],
+
+          // ── Training starten ─────────────────────────────────────────────
+          ElevatedButton.icon(
+            onPressed: widget.onStartTraining,
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text("Training starten"),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
             ),
+          ),
+
+          // ── Körperwerte erfassen ──────────────────────────────────────────
+          if (userId != null) ...[
+            const SizedBox(height: 28),
+            _sectionHeader(cs, 'Körperwerte erfassen', Icons.edit_outlined),
+            const SizedBox(height: 10),
+            const WeightInputCard(),
+
+            // ── Fortschritt je Feld ─────────────────────────────────────────
+            const SizedBox(height: 28),
+            _sectionHeader(cs, 'Mein Fortschritt', Icons.trending_up),
+            const SizedBox(height: 10),
+            _buildProgressSection(cs, userId),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildHeader() {
+  // ── Hilfsmethoden ──────────────────────────────────────────────────────────
+
+  Widget _buildHeader(ColorScheme cs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Hallo Champ! 👋",
-          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+          "Hallo Champ!",
+          style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
         ),
-        const Text(
+        const SizedBox(height: 4),
+        Text(
           "Bereit für dein Training?",
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildStatCards() {
+  Widget _buildWorkoutStatRow(ColorScheme cs) {
     return Row(
       children: [
-        _statCard(
-          "Diese Woche",
-          "$_workoutsThisWeek",
-          Icons.calendar_today,
-          Colors.orange,
+        _statChip(
+          cs,
+          icon: Icons.calendar_today_outlined,
+          label: 'Diese Woche',
+          value: '$_workoutsThisWeek',
+          color: AppColors.warning,
         ),
-        const SizedBox(width: 15),
-        _statCard(
-          "Status",
-          _workoutsThisWeek > 0 ? "Aktiv" : "Pause",
-          Icons.bolt,
-          Colors.green,
+        const SizedBox(width: 12),
+        _statChip(
+          cs,
+          icon: Icons.bolt_outlined,
+          label: 'Status',
+          value: _workoutsThisWeek > 0 ? 'Aktiv' : 'Pause',
+          color: _workoutsThisWeek > 0
+              ? AppColors.success
+              : cs.onSurfaceVariant,
         ),
       ],
     );
   }
 
-  Widget _statCard(String title, String value, IconData icon, Color color) {
+  Widget _statChip(
+    ColorScheme cs, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.outline.withValues(alpha: 0.4)),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 18),
             ),
-            Text(
-              title,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                ),
+              ],
             ),
           ],
         ),
@@ -124,51 +185,138 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  Widget _buildLastWorkoutCard() {
-    if (_lastWorkout == null) return const SizedBox();
+  Widget _buildLastWorkoutCard(ColorScheme cs) {
+    final raw = _lastWorkout!['completed_at'];
+    final date =
+        raw is String ? DateTime.parse(raw).toLocal() : DateTime.now();
 
-    final date = DateTime.parse(_lastWorkout!['completed_at']).toLocal();
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blueAccent.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.1)),
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outline.withValues(alpha: 0.4)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          const Text(
-            "Letztes Training",
-            style: TextStyle(fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.history, color: cs.primary, size: 18),
           ),
-          const SizedBox(height: 10),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(_lastWorkout!['plan_name']),
-            subtitle: Text(DateFormat('dd.MM.yyyy').format(date)),
-            trailing: const Icon(Icons.chevron_right),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Letztes Training',
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                ),
+                Text(
+                  _lastWorkout!['plan_name'] ?? '',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            DateFormat('dd.MM.yy').format(date),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActions() {
-    return Column(
+  Widget _sectionHeader(ColorScheme cs, String title, IconData icon) {
+    return Row(
       children: [
-        ElevatedButton.icon(
-          onPressed: widget.onStartTraining,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text("Training starten"),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size.fromHeight(60),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
+        Icon(icon, size: 18, color: cs.primary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildProgressSection(ColorScheme cs, String userId) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _supabase
+          .from('user_settings')
+          .stream(primaryKey: ['user_id'])
+          .eq('user_id', userId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox(
+            height: 60,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final settings = snapshot.data!.first;
+        final activeFields = kStatConfig.entries
+            .where((e) => settings[e.key] == true)
+            .toList();
+
+        if (activeFields.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.outline.withValues(alpha: 0.4)),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.tune_outlined,
+                  color: cs.onSurfaceVariant,
+                  size: 32,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Keine Felder aktiviert.',
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Aktiviere Felder in den Einstellungen.',
+                  style:
+                      TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
+          physics: const NeverScrollableScrollPhysics(),
+          shrinkWrap: true,
+          itemCount: activeFields.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (_, index) {
+            final cfg = activeFields[index].value;
+            return StatProgressCard(
+              column: cfg['column']!,
+              label: cfg['label']!,
+              unit: cfg['unit']!,
+            );
+          },
+        );
+      },
     );
   }
 }

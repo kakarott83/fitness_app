@@ -12,7 +12,7 @@ class WorkoutView extends StatefulWidget {
 }
 
 class _WorkoutViewState extends State<WorkoutView> {
-  final _dbService = DatabaseService(); // Unser neuer Logik-Spezialist
+  final _dbService = DatabaseService();
   final _planNameController = TextEditingController();
 
   bool _isEditing = false;
@@ -25,7 +25,6 @@ class _WorkoutViewState extends State<WorkoutView> {
     _planNameController.addListener(() => setState(() {}));
   }
 
-  // LOGIK-WRAPPER
   void _prepareNewPlan() {
     setState(() {
       _isEditing = true;
@@ -37,15 +36,11 @@ class _WorkoutViewState extends State<WorkoutView> {
   }
 
   void _editExistingPlan(Map<String, dynamic> plan) async {
-    // 1. Übungen über den Service aus Supabase laden
     final loadedExercises = await _dbService.getExercisesForPlan(plan['id']);
-
     setState(() {
       _isEditing = true;
       _editingPlanId = plan['id'];
       _planNameController.text = plan['name'];
-
-      // 2. Die Liste der Übungen im Editor mit den geladenen Daten füllen
       _exercises.clear();
       _exercises.addAll(loadedExercises);
     });
@@ -54,7 +49,7 @@ class _WorkoutViewState extends State<WorkoutView> {
   void _startWorkout(Map<String, dynamic> plan) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ActiveWorkoutView(plan: plan)),
+      MaterialPageRoute(builder: (_) => ActiveWorkoutView(plan: plan)),
     );
   }
 
@@ -67,7 +62,6 @@ class _WorkoutViewState extends State<WorkoutView> {
     setState(() => _isEditing = false);
   }
 
-  // HAUPT-UI
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -77,7 +71,7 @@ class _WorkoutViewState extends State<WorkoutView> {
           if (!_isEditing)
             IconButton(
               onPressed: _prepareNewPlan,
-              icon: const Icon(Icons.add_circle_outline, size: 28),
+              icon: const Icon(Icons.add_circle_outline, size: 26),
             ),
         ],
       ),
@@ -87,6 +81,8 @@ class _WorkoutViewState extends State<WorkoutView> {
   }
 
   Widget _buildList() {
+    final cs = Theme.of(context).colorScheme;
+
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _dbService.workoutPlansStream,
       builder: (context, snapshot) {
@@ -95,32 +91,80 @@ class _WorkoutViewState extends State<WorkoutView> {
         }
         final plans = snapshot.data!;
 
-        return ListView.builder(
+        if (plans.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.fitness_center_outlined,
+                  size: 72,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Noch keine Pläne vorhanden.",
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _prepareNewPlan,
+                  icon: const Icon(Icons.add),
+                  label: const Text("Ersten Plan erstellen"),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: plans.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
             final plan = plans[index];
             return Dismissible(
               key: Key(plan['id']),
               direction: DismissDirection.endToStart,
               background: Container(
-                color: Colors.red,
                 alignment: Alignment.centerRight,
-                child: const Icon(Icons.delete, color: Colors.white),
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: cs.error,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.delete_outline, color: cs.onError),
               ),
-              // HIER DIE LÖSCH-FUNKTION ANKNÜPFEN:
-              onDismissed: (direction) => _dbService.deletePlan(plan['id']),
+              onDismissed: (_) => _dbService.deletePlan(plan['id']),
               child: Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.fitness_center,
+                      color: cs.primary,
+                      size: 20,
+                    ),
+                  ),
                   title: Text(
                     plan['name'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
                   ),
-                  // HIER STARTEN:
                   onTap: () => _startWorkout(plan),
-                  // HIER BEARBEITEN:
                   trailing: IconButton(
-                    icon: const Icon(Icons.edit_note),
+                    icon: Icon(Icons.edit_outlined, color: cs.onSurfaceVariant),
                     onPressed: () => _editExistingPlan(plan),
                   ),
                 ),
@@ -136,18 +180,17 @@ class _WorkoutViewState extends State<WorkoutView> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: TextField(
             controller: _planNameController,
-            decoration: const InputDecoration(
-              labelText: "Name des Plans",
-              border: OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(labelText: "Name des Plans"),
           ),
         ),
         Expanded(
-          child: ListView.builder(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             itemCount: _exercises.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) => ExerciseCardEditor(
               exercise: _exercises[index],
               onDelete: () => setState(() => _exercises.removeAt(index)),
@@ -161,6 +204,7 @@ class _WorkoutViewState extends State<WorkoutView> {
           icon: const Icon(Icons.add),
           label: const Text("Übung hinzufügen"),
         ),
+        const SizedBox(height: 4),
       ],
     );
   }

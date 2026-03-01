@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "mifit_app (Flutter Pixel 9)",
+      "request": "launch",
+      "type": "dart",
+      "program": "mifit_app/lib/main.dart",
+      "args": ["-d", "Pixel_9"]
+    },
+    {
+      "name": "mifit_app (Flutter Windows)",
+      "request": "launch",
+      "type": "dart",
+      "program": "mifit_app/lib/main.dart",
+      "args": ["-d", "windows"]
+    }
+  ]
+}

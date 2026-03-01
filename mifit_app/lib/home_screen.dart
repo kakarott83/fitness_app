@@ -14,44 +14,50 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  void _changeTab(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _changeTab(int index) => setState(() => _selectedIndex = index);
 
   @override
   Widget build(BuildContext context) {
-    // Diese Liste steuert, was angezeigt wird
     final List<Widget> screens = [
-      DashboardView(onStartTraining: () => _changeTab(1)), // Index 0
-      const WorkoutView(), // Index 1
-      const HistoryView(), // Index 2 (früher BodyStats)
+      DashboardView(onStartTraining: () => _changeTab(1)),
+      const WorkoutView(),
+      const HistoryView(),
     ];
+
+    final titles = ['Dashboard', 'Meine Pläne', 'Verlauf'];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedIndex == 0 ? 'Körper' : 'Training'),
+        title: Text(titles[_selectedIndex]),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
           ),
         ],
       ),
-      // IndexedStack hält den Zustand beider Tabs im Speicher
       body: IndexedStack(index: _selectedIndex, children: screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (i) => setState(() => _selectedIndex = i),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'Status'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center),
-            label: 'Pläne',
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.fitness_center_outlined),
+            activeIcon: Icon(Icons.fitness_center),
+            label: 'Training',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history_outlined),
+            activeIcon: Icon(Icons.history),
+            label: 'Verlauf',
           ),
         ],
       ),

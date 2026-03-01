@@ -81,7 +81,44 @@ class ExerciseCardEditor extends StatelessWidget {
               },
             ),
             const SizedBox(height: 12),
-            // Eingaben
+            // Eingaben — Zeile 1: Sätze & Pause
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: exercise.sets.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Sätze',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (val) {
+                      exercise.sets = int.tryParse(val) ?? 1;
+                      onUpdate();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    initialValue: exercise.restSeconds > 0
+                        ? exercise.restSeconds.toString()
+                        : null,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Pause (sek)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (val) {
+                      exercise.restSeconds = int.tryParse(val) ?? 0;
+                      onUpdate();
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Eingaben — Zeile 2: Wdh./sek & kg
             Row(
               children: [
                 Expanded(
